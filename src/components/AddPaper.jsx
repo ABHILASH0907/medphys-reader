@@ -3,7 +3,7 @@ import { extractPaperMetadata, fetchPubmedAbstract } from "../api.js";
 
 const LEVELS = ["Beginner", "Intermediate", "Advanced"];
 
-export default function AddPaper({ onAdd, onBack, apiKey }) {
+export default function AddPaper({ onAdd, onBack }) {
   const [mode, setMode] = useState(null); // "pdf" | "pubmed" | "text"
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -11,28 +11,6 @@ export default function AddPaper({ onAdd, onBack, apiKey }) {
   const [editing, setEditing] = useState(null); // editable form state
   const [pubmedUrl, setPubmedUrl] = useState("");
   const [rawText, setRawText] = useState("");
-
-  const injectApiKey = (originalFetch) => async (url, options = {}) => {
-    if (url.includes("anthropic.com")) {
-      options.headers = {
-        ...options.headers,
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      };
-    }
-    return originalFetch(url, options);
-  };
-
-  const withApiKey = async (fn) => {
-    const orig = window.fetch;
-    window.fetch = injectApiKey(orig);
-    try {
-      return await fn();
-    } finally {
-      window.fetch = orig;
-    }
-  };
 
   const handlePdf = async (e) => {
     const file = e.target.files[0];
@@ -50,61 +28,18 @@ export default function AddPaper({ onAdd, onBack, apiKey }) {
         const result = await mammoth.extractRawText({ arrayBuffer: ab });
         text = result.value;
       } else {
-        // PDF: Use FileReader to get base64, then send to Claude as document
-        const base64 = await new Promise((res) => {
-          const fr = new FileReader();
-          fr.onload = () => res(fr.result.split(",")[1]);
-          fr.readAsDataURL(file);
-        });
-        // Call Claude with PDF directly
-        const orig = window.fetch;
-        window.fetch = injectApiKey(orig);
-        const resp = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-20250514",
-            max_tokens: 1500,
-            messages: [{
-              role: "user",
-              content: [
-                {
-                  type: "document",
-                  source: { type: "base64", media_type: "application/pdf", data: base64 }
-                },
-                {
-                  type: "text",
-                  text: `Extract structured metadata from this medical physics paper. Return ONLY valid JSON:
-{
-  "title": "full paper title",
-  "topic": "short topic area",
-  "level": "Beginner or Intermediate or Advanced",
-  "summary": "2-3 sentence plain English summary",
-  "keyPoints": ["4-5 key concepts covered"],
-  "citation": "Author et al. Journal. Year.",
-  "fullText": "first 1000 words of the paper"
-}`
-                }
-              ]
-            }]
-          })
-        });
-        window.fetch = orig;
-        const data = await resp.json();
-        const raw = data.content.map(b => b.text || "").join("");
-        const clean = raw.replace(/```json|```/g, "").trim();
-        const parsed = JSON.parse(clean);
-        setExtracted(parsed);
-        setEditing({ ...parsed, pubmedUrl: "", readTime: "35 min" });
+        // PDF: For now, show error message since we need text content
+        // In a real app, we'd use PDF.js or similar library
+        setError("PDF extraction requires manual copy-paste. Please use Text mode instead.");
         setLoading(false);
         return;
       }
 
-      const meta = await withApiKey(() => extractPaperMetadata(text));
+      const meta = await extractPaperMetadata(text);
       setExtracted({ ...meta, fullText: text.slice(0, 2000) });
       setEditing({ ...meta, fullText: text.slice(0, 2000), pubmedUrl: "", readTime: "35 min" });
     } catch (e) {
-      setError("Could not extract paper. Make sure it's a PDF or DOCX file. Error: " + e.message);
+      setError("Could not extract paper. Make sure it's a DOCX file. Error: " + e.message);
     }
     setLoading(false);
   };
@@ -115,7 +50,7 @@ export default function AddPaper({ onAdd, onBack, apiKey }) {
     setError("");
     try {
       const abstract = await fetchPubmedAbstract(pubmedUrl.trim());
-      const meta = await withApiKey(() => extractPaperMetadata(abstract));
+      const meta = await extractPaperMetadata(abstract);
       setExtracted({ ...meta, fullText: abstract.slice(0, 2000) });
       setEditing({ ...meta, fullText: abstract.slice(0, 2000), pubmedUrl: pubmedUrl.trim(), readTime: "35 min" });
     } catch (e) {
@@ -132,7 +67,7 @@ export default function AddPaper({ onAdd, onBack, apiKey }) {
     setLoading(true);
     setError("");
     try {
-      const meta = await withApiKey(() => extractPaperMetadata(rawText));
+      const meta = await extractPaperMetadata(rawText);
       setExtracted({ ...meta, fullText: rawText.slice(0, 2000) });
       setEditing({ ...meta, fullText: rawText.slice(0, 2000), pubmedUrl: "", readTime: "35 min" });
     } catch (e) {

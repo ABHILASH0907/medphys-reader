@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { analyzeSummary } from "../api.js";
 
-export default function Reader({ paper, isCompleted, onComplete, onBack, apiKey }) {
+export default function Reader({ paper, isCompleted, onComplete, onBack }) {
   const [checked, setChecked] = useState({});
   const [summary, setSummary] = useState("");
   const [feedback, setFeedback] = useState(null);
@@ -20,34 +20,16 @@ export default function Reader({ paper, isCompleted, onComplete, onBack, apiKey 
     setError("");
     setLoading(true);
 
-    // Temporarily inject API key
-    const originalKey = window.__MEDPHYS_API_KEY__;
-    window.__MEDPHYS_API_KEY__ = apiKey;
-
-    // Override fetch for this call to inject auth header
-    const originalFetch = window.fetch;
-    window.fetch = async (url, options = {}) => {
-      if (url.includes("anthropic.com")) {
-        options.headers = {
-          ...options.headers,
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        };
-      }
-      return originalFetch(url, options);
-    };
-
     try {
       const result = await analyzeSummary(paper, summary);
       setFeedback(result);
       setTab("feedback");
       onComplete(paper.id);
     } catch (e) {
-      setError("Analysis failed. Check your API key in Settings or try again.");
+      setError("Analysis failed. Please try again.");
+      console.error(e);
     }
 
-    window.fetch = originalFetch;
     setLoading(false);
   };
 

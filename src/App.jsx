@@ -99,15 +99,6 @@ export default function App() {
     setView("library");
   };
 
-  // Inject API key into fetch calls via a global
-  useEffect(() => {
-    window.__MEDPHYS_API_KEY__ = data.apiKey;
-  }, [data.apiKey]);
-
-  if (!data.apiKey && view !== "setup") {
-    return <ApiKeySetup onSave={saveApiKey} />;
-  }
-
   return (
     <div style={{ minHeight: "100vh", background: "#080808", fontFamily: "'Crimson Pro', Georgia, serif" }}>
       {view === "library" && (
@@ -127,14 +118,12 @@ export default function App() {
           isCompleted={data.completed[activePaper.id]}
           onComplete={markComplete}
           onBack={() => setView("library")}
-          apiKey={data.apiKey}
         />
       )}
       {view === "add" && (
         <AddPaper
           onAdd={addCustomPaper}
           onBack={() => setView("library")}
-          apiKey={data.apiKey}
         />
       )}
       {view === "setup" && (
@@ -142,4 +131,3 @@ export default function App() {
       )}
     </div>
   );
-}
